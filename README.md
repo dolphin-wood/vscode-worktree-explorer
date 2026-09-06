@@ -189,6 +189,9 @@ files do not quietly become unreachable.
 
 ## Limitations
 
+- Auto-reveal scrolls the file into view, but not to the middle of it. The Explorer centres
+  the revealed item; `TreeView.reveal` takes only `select`, `focus` and `expand`, with no
+  scroll-position parameter, so an extension cannot reproduce that.
 - Session detection needs the session to be an editor tab. With Claude Code docked in the
   sidebar there is no label to read, so it falls back to the most recent transcript by
   modification time, which may not be the session you are looking at.

@@ -743,6 +743,10 @@ function activate(context) {
     const node = filesProvider.nodeForPath(fsPath);
     if (!node) return;
     try {
+      // Only scrolls the item into view, not to the middle of it: TreeView.reveal takes
+      // select/focus/expand and nothing about scroll position. The Explorer centres its
+      // reveal through an internal API that extensions cannot reach. focus is left false
+      // deliberately - taking focus would pull the caret out of the editor.
       await filesView.reveal(node, { select: true, focus: false, expand: false });
     } catch { /* hidden by .gitignore or excludeDirs, so not in the tree */ }
   };

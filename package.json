@@ -385,6 +385,11 @@
           "type": "boolean",
           "default": true,
           "description": "Show git status colors and badges on the file tree, the way the Explorer does. Status is read only for opened worktrees."
+        },
+        "worktreeExplorer.deferToBuiltinGit": {
+          "type": "boolean",
+          "default": true,
+          "description": "Skip painting status on worktrees the built-in git extension has already opened as repositories, which would otherwise render both badges (\"U, U\"). Per-worktree tallies are shown either way."
         }
       }
     },

@@ -31,8 +31,11 @@ Restart VS Code once. After that, code changes only need `Cmd+Shift+P` → **Rel
 
 The **Worktrees** container in the activity bar has two panes.
 
-**Worktrees** lists every worktree of every git repository under your workspace folders,
-each with its branch and a `~5 +3 -1` tally of its git status. Click one to open it.
+**Worktrees** lists every worktree of every git repository under your workspace folders, each
+with a `~5 +3 -1` tally of its uncommitted work and its branch. The tally comes before the
+branch because descriptions elide from the right, and a long branch name would otherwise push
+the part that actually changes out of view. A row's icon is tinted by its most urgent state,
+since a description is one flat colour and cannot carry that itself. Click a row to open it.
 
 **Opened** holds the file trees of the worktrees you opened. Several can be open at once,
 and the set is remembered across window reloads. Files open in the current window like any

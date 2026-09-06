@@ -132,16 +132,27 @@ class ListProvider {
     const isActive = wt.path === this.store.activePath;
     const isOpen = this.store.isOpen(wt.path);
 
+    const tally = this.store.git ? this.store.git.summaryText(wt.path) : null;
+    const state = this.store.git ? this.store.git.dominantState(wt.path) : null;
+
+    // The tally goes before the branch name: descriptions elide from the right, and a long
+    // branch would otherwise push the part that actually changes out of view.
     item.description = [
       isOpen ? '●' : null,
+      tally,
       branch,
-      this.store.git ? this.store.git.summaryText(wt.path) : null,
       multiRepo ? `— ${wt.repoName}` : null,
-    ].filter(Boolean).join(' ');
+    ].filter(Boolean).join('  ');
     item.contextValue = 'wtxListItem';
+
+    // A description is one flat colour, so state has to be carried by the icon.
+    let color;
+    if (isActive) color = new vscode.ThemeColor('charts.green');
+    else if (wt.stale) color = new vscode.ThemeColor('gitDecoration.ignoredResourceForeground');
+    else if (state) color = new vscode.ThemeColor(GIT_DECO[state].color);
     item.iconPath = new vscode.ThemeIcon(
       wt.stale ? 'warning' : wt.isMain ? 'repo' : 'git-branch',
-      isActive ? new vscode.ThemeColor('charts.green') : undefined,
+      color,
     );
     item.tooltip = new vscode.MarkdownString([
       `**${wt.name}**${isActive ? '  \u00b7  \u27f5 current Claude session' : ''}`,
@@ -213,15 +224,15 @@ class FilesProvider {
       const wt = node.wt;
       const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
       item.id = `root:${node.path}`;
-      item.description = [
-        wt.stale ? 'stale' : wt.branch || '(detached)',
-        this.store.git ? this.store.git.summaryText(wt.path) : null,
-      ].filter(Boolean).join('  ');
+      const tally = this.store.git ? this.store.git.summaryText(wt.path) : null;
+      const state = this.store.git ? this.store.git.dominantState(wt.path) : null;
+      item.description = [tally, wt.stale ? 'stale' : wt.branch || '(detached)']
+        .filter(Boolean).join('  ');
       item.contextValue = 'wtxOpenedRoot';
-      item.iconPath = new vscode.ThemeIcon(
-        'root-folder',
-        wt.path === this.store.activePath ? new vscode.ThemeColor('charts.green') : undefined,
-      );
+      let color;
+      if (wt.path === this.store.activePath) color = new vscode.ThemeColor('charts.green');
+      else if (state) color = new vscode.ThemeColor(GIT_DECO[state].color);
+      item.iconPath = new vscode.ThemeIcon('root-folder', color);
       item.tooltip = wt.path;
       return item;
     }
@@ -303,6 +314,28 @@ class GitStatus {
     this.timer = undefined;
   }
 
+  /**
+   * Worktrees the built-in git extension has already opened as repositories. VS Code merges
+   * badges from every decoration provider, so decorating those again renders as "U, U".
+   * Where it is already covering a worktree, stand down and let it - it updates live, which
+   * a poller cannot match. The per-worktree tallies stay ours either way, since it has
+   * nothing equivalent.
+   */
+  builtinRoots() {
+    if (cfg().get('deferToBuiltinGit') === false) return new Set();
+    const ext = vscode.extensions.getExtension('vscode.git');
+    if (!ext || !ext.isActive) return new Set();
+    try {
+      const api = ext.exports.getAPI(1);
+      return new Set(api.repositories.map((r) => {
+        const p = r.rootUri.fsPath;
+        try { return fs.realpathSync(p); } catch { return p; }
+      }));
+    } catch {
+      return new Set();
+    }
+  }
+
   provideFileDecoration(uri) {
     if (uri.scheme !== 'file' || cfg().get('showGitStatus') === false) return undefined;
     const own = this.files.get(uri.fsPath);
@@ -316,6 +349,18 @@ class GitStatus {
       return { color: new vscode.ThemeColor(d.color), tooltip: `Contains ${d.label.toLowerCase()} files` };
     }
     return undefined;
+  }
+
+  /** The most urgent state in a worktree, for colouring its row. */
+  dominantState(wtPath) {
+    const t = this.counts.get(wtPath);
+    if (!t) return null;
+    let best = null;
+    for (const k of Object.keys(t)) {
+      if (!t[k]) continue;
+      if (!best || GIT_RANK[k] > GIT_RANK[best]) best = k;
+    }
+    return best;
   }
 
   /** Short SCM-style tally for a worktree row, e.g. "~5 +3 -1". */
@@ -346,13 +391,16 @@ class GitStatus {
     const counts = new Map();
 
     if (!clear) {
+      const covered = this.builtinRoots();
       await Promise.all(this.store.openedWorktrees().map(async (wt) => {
         const entries = await core.gitStatus(wt.path);
         if (!entries) return;
+        const decorate = !covered.has(wt.path);
         const tally = {};
         for (const e of entries) {
           const kind = core.classifyStatus(e.x, e.y);
           tally[kind] = (tally[kind] || 0) + 1;
+          if (!decorate) continue;
           const abs = path.join(wt.path, e.path);
           files.set(abs, kind);
           for (let d = path.dirname(abs); d.length > wt.path.length && d.startsWith(wt.path); d = path.dirname(d)) {
@@ -903,6 +951,25 @@ function activate(context) {
       revealPath(p);
     }),
   );
+
+  // The built-in git extension discovers repositories asynchronously, so what it covers is
+  // not known at activation time.
+  const gitExt = vscode.extensions.getExtension('vscode.git');
+  if (gitExt) {
+    Promise.resolve(gitExt.activate()).then(
+      () => {
+        try {
+          const api = gitExt.exports.getAPI(1);
+          context.subscriptions.push(
+            api.onDidOpenRepository(() => gitStatus.schedule(0)),
+            api.onDidCloseRepository(() => gitStatus.schedule(0)),
+          );
+        } catch { /* API shape changed; our own decorations still work */ }
+        gitStatus.schedule(0);
+      },
+      () => {},
+    );
+  }
 
   syncFilesTitle();
   syncTabContext();

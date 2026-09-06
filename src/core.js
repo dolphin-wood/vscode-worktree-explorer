@@ -235,11 +235,13 @@ function readDirEntries(dir, { excludeDirs = WALK_EXCLUDES, ignored = null, root
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
   const out = [];
   for (const e of entries) {
+    // Name-based skips apply to files too: in a linked worktree .git is a pointer file,
+    // not a directory, so a directory-only test would leave it on show.
+    if (skip.has(e.name)) continue;
     const full = path.join(dir, e.name);
     const isDir = e.isDirectory() || (e.isSymbolicLink() && (() => {
       try { return fs.statSync(full).isDirectory(); } catch { return false; }
     })());
-    if (isDir && skip.has(e.name)) continue;
     if (ignored && root) {
       const rel = path.relative(root, full);
       if (ignored.has(rel) || ignored.has(`${rel}/`)) continue;

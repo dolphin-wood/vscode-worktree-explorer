@@ -340,7 +340,7 @@
           "default": [
             ".git"
           ],
-          "description": "Directory names always hidden in the file tree, on top of whatever .gitignore already excludes. Most build and dependency directories are covered by hideIgnoredFiles, so this is only for things git does not ignore."
+          "description": "Names always hidden in the file tree, on top of whatever .gitignore excludes. Applies to files as well as directories, which is how .git is hidden in a linked worktree where it is a pointer file."
         },
         "worktreeExplorer.quickOpenMaxFiles": {
           "type": "number",

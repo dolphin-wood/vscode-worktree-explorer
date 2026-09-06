@@ -34,8 +34,21 @@ The **Worktrees** container in the activity bar has two panes.
 **Worktrees** lists every worktree of every git repository under your workspace folders, each
 with a `~5 +3 -1` tally of its uncommitted work and its branch. The tally comes before the
 branch because descriptions elide from the right, and a long branch name would otherwise push
-the part that actually changes out of view. A row's icon is tinted by its most urgent state,
-since a description is one flat colour and cannot carry that itself. Click a row to open it.
+the part that actually changes out of view. Click a row to open it.
+
+A row's icon says what kind of worktree it is and whether it is usable:
+
+| | Icon | |
+|---|---|---|
+| on a branch | `git-branch` | blue while opened below |
+| detached | `git-commit` | shows the commit it sits on |
+| locked | `lock` | `git worktree lock`; refuses pruning |
+| stale | `warning` | metadata pruned, files still on disk |
+| missing | `error` | registered, but the directory is gone |
+| current agent session | any | green, outranking the rest |
+
+Anything abnormal is also spelled out in the row, since a tinted icon at 16px is easy to
+miss. Colour here describes the worktree itself; file-level git state lives in the tree below.
 
 **Opened** holds the file trees of the worktrees you opened. Several can be open at once,
 and the set is remembered across window reloads. Files open in the current window like any
@@ -125,9 +138,14 @@ allows. Contributions welcome.
 
 Every workspace folder is scanned `repoScanDepth` levels down for git repositories, then
 `git worktree list` runs once per repository, collapsed by `--git-common-dir` so a repo
-reached from several entry points is only asked once. The layout comes from git, not from a
-convention imposed here, so `foo.worktrees/*`, `foo/.claude/worktrees/*` and anything else
-all work.
+reached from several entry points is only asked once.
+
+**The worktrees themselves do not have to be anywhere near your workspace.** git reports them
+by absolute path, so finding one repository is enough to find every worktree attached to it —
+open just the main checkout and its worktrees are listed even though nothing else is on the
+workspace. That is the point: reaching them is exactly what would otherwise cost you a second
+window. The layout comes from git rather than a convention imposed here, so `foo.worktrees/*`,
+`foo/.claude/worktrees/*` and anything else all work.
 
 Orphan directories left by `git worktree prune` — metadata gone, files still on disk — are
 listed as `stale` and indexed by walking the directory rather than asking git, so their

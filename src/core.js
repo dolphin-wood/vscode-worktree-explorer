@@ -352,6 +352,20 @@ function recentSessions({ home, limit = 12 } = {}) {
   return cands.slice(0, limit).map((c) => ({ ...c, ...extractSessionState(c.file) }));
 }
 
+/**
+ * The worktree's own condition, independent of any file changes inside it. git worktree list
+ * reports lock and prune candidacy, and a registered worktree whose directory was removed by
+ * hand still shows up - all states worth telling apart before you click into one.
+ */
+function worktreeState(wt) {
+  if (!wt.exists) return 'missing';   // registered, but the directory is gone
+  if (wt.stale) return 'stale';       // directory survives, git metadata was pruned
+  if (wt.locked) return 'locked';     // git worktree lock: refuses pruning, often a removable disk
+  if (wt.isMain) return 'main';
+  if (wt.detached) return 'detached'; // on a commit, not a branch
+  return 'linked';
+}
+
 function isInside(child, parent) {
   const rel = path.relative(parent, child);
   return rel === '' || (!rel.startsWith('..') && !path.isAbsolute(rel));
@@ -449,6 +463,7 @@ module.exports = {
   detectSessionWorktree,
   matchSessionToWorktree,
   isInside,
+  worktreeState,
 };
 
 // ---------------------------------------------------------------- smoke test

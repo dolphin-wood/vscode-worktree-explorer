@@ -127,36 +127,34 @@ class ListProvider {
     const item = new vscode.TreeItem(wt.name, vscode.TreeItemCollapsibleState.None);
     item.id = `wt:${wt.path}`;
     const multiRepo = new Set(this.store.visible().filter((w) => !w.isMain).map((w) => w.repoName)).size > 1;
-    const branch = wt.stale ? 'stale (pruned)'
-      : wt.branch || `(detached ${String(wt.head || '').slice(0, 7)})`;
+    const branch = wt.branch || (wt.head ? `@${String(wt.head).slice(0, 7)}` : null);
     const isActive = wt.path === this.store.activePath;
     const isOpen = this.store.isOpen(wt.path);
 
     const tally = this.store.git ? this.store.git.summaryText(wt.path) : null;
-    const state = this.store.git ? this.store.git.dominantState(wt.path) : null;
+    const look = WT_LOOK[core.worktreeState(wt)];
 
-    // The tally goes before the branch name: descriptions elide from the right, and a long
-    // branch would otherwise push the part that actually changes out of view.
+    // Abnormal condition first, then the tally, then the branch: descriptions elide from the
+    // right, so whatever changes most often has to sit furthest left.
     item.description = [
-      isOpen ? '●' : null,
+      look.label,
       tally,
       branch,
       multiRepo ? `— ${wt.repoName}` : null,
     ].filter(Boolean).join('  ');
     item.contextValue = 'wtxListItem';
 
-    // A description is one flat colour, so state has to be carried by the icon.
-    let color;
-    if (isActive) color = new vscode.ThemeColor('charts.green');
-    else if (wt.stale) color = new vscode.ThemeColor('gitDecoration.ignoredResourceForeground');
-    else if (state) color = new vscode.ThemeColor(GIT_DECO[state].color);
-    item.iconPath = new vscode.ThemeIcon(
-      wt.stale ? 'warning' : wt.isMain ? 'repo' : 'git-branch',
-      color,
-    );
+    // Colour ranks by how much it should interrupt you: the session you are in, then anything
+    // unusable, then merely open.
+    let color = null;
+    if (isActive) color = 'charts.green';
+    else if (look.color) color = look.color;
+    else if (isOpen) color = 'charts.blue';
+    item.iconPath = new vscode.ThemeIcon(look.icon, color ? new vscode.ThemeColor(color) : undefined);
     item.tooltip = new vscode.MarkdownString([
       `**${wt.name}**${isActive ? '  \u00b7  \u27f5 current Claude session' : ''}`,
       '',
+      `State: \`${core.worktreeState(wt)}\`${isOpen ? ' (opened)' : ''}`,
       `Branch: \`${wt.branch || '(detached)'}\``,
       `Repo: \`${wt.repoName}\``,
       `Path: \`${wt.path}\``,
@@ -225,14 +223,18 @@ class FilesProvider {
       const item = new vscode.TreeItem(node.label, vscode.TreeItemCollapsibleState.Expanded);
       item.id = `root:${node.path}`;
       const tally = this.store.git ? this.store.git.summaryText(wt.path) : null;
-      const state = this.store.git ? this.store.git.dominantState(wt.path) : null;
-      item.description = [tally, wt.stale ? 'stale' : wt.branch || '(detached)']
-        .filter(Boolean).join('  ');
+      const look = WT_LOOK[core.worktreeState(wt)];
+      item.description = [
+        look.label,
+        tally,
+        wt.branch || (wt.head ? `@${String(wt.head).slice(0, 7)}` : null),
+      ].filter(Boolean).join('  ');
       item.contextValue = 'wtxOpenedRoot';
-      let color;
-      if (wt.path === this.store.activePath) color = new vscode.ThemeColor('charts.green');
-      else if (state) color = new vscode.ThemeColor(GIT_DECO[state].color);
-      item.iconPath = new vscode.ThemeIcon('root-folder', color);
+      const color = wt.path === this.store.activePath ? 'charts.green' : look.color;
+      item.iconPath = new vscode.ThemeIcon(
+        look.icon === 'git-branch' ? 'root-folder' : look.icon,
+        color ? new vscode.ThemeColor(color) : undefined,
+      );
       item.tooltip = wt.path;
       return item;
     }
@@ -294,6 +296,20 @@ const GIT_DECO = {
 };
 // Which state wins when a directory holds several: the more urgent one.
 const GIT_RANK = { untracked: 1, added: 2, renamed: 3, modified: 4, deleted: 5, conflict: 6 };
+
+/**
+ * How each worktree condition is drawn. Shape carries the kind, colour carries whether it is
+ * usable, and the label spells out anything abnormal, because a tinted icon at 16px is easy
+ * to miss. Colours here describe the worktree itself; file-level git state stays in the tree.
+ */
+const WT_LOOK = {
+  missing:  { icon: 'error',      color: 'errorForeground',       label: 'missing' },
+  stale:    { icon: 'warning',    color: 'disabledForeground',    label: 'stale' },
+  locked:   { icon: 'lock',       color: 'list.warningForeground', label: 'locked' },
+  main:     { icon: 'repo',       color: null,                    label: null },
+  detached: { icon: 'git-commit', color: null,                    label: 'detached' },
+  linked:   { icon: 'git-branch', color: null,                    label: null },
+};
 
 /**
  * Paints git status onto the file tree the way the Explorer does. The built-in git extension
@@ -403,7 +419,7 @@ class GitStatus {
           if (!decorate) continue;
           const abs = path.join(wt.path, e.path);
           files.set(abs, kind);
-          for (let d = path.dirname(abs); d.length > wt.path.length && d.startsWith(wt.path); d = path.dirname(d)) {
+          for (let d = path.dirname(abs); d !== wt.path && core.isInside(d, wt.path); d = path.dirname(d)) {
             const prev = dirs.get(d);
             if (!prev || GIT_RANK[kind] > GIT_RANK[prev]) dirs.set(d, kind);
           }

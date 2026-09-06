@@ -1,57 +1,65 @@
 # CC Worktree Nav
 
-在**当前 VSCode 窗口内**浏览、搜索 git worktree 的文件，并一键定位当前 Claude Code session 所在的 worktree。
+Browse and search the files of your git worktrees **inside the current VS Code window**, and jump straight to the worktree the active Claude Code session is working in.
 
-不新开窗口 → 不会丢掉正在跑的 CC session。
+No new window, so a running Claude Code session is never lost to a reload.
 
-## 解决的三个问题
+## What it solves
 
-| 问题 | 做法 |
+| Problem | How |
 |---|---|
-| worktree 下的文件 `Cmd+P` 搜不到 | 独立的文件索引 + QuickPick（`Cmd+Alt+P`），用 `git ls-files` 取文件，天然跳过 gitignore 的 `node_modules` 等 |
-| 没有能浏览 worktree 的资源管理器 | 活动栏里的 **Worktrees** 面板：worktree 列表 → 展开即文件树，点文件直接打开 |
-| CC session 和 worktree 对不上 | 用活跃 tab 的标题锁定 session，再读它 transcript 里的 `cwd` / `gitBranch`，与 `git worktree list` 双通道匹配 |
+| `Cmd+P` cannot find files under a worktree | A separate file index behind its own quick open (`Cmd+Alt+P`). Files come from `git ls-files`, so `.gitignore` is honoured for free and `node_modules` never pollutes the results |
+| No explorer for worktrees | A **Worktrees** container in the activity bar: the worktree list on top, file trees of the opened ones below |
+| Sessions and worktrees do not line up | The active tab's label pins down the session, then its transcript's `cwd` / `gitBranch` are matched against `git worktree list` |
 
-## 安装（本地开发版）
+## Install
 
 ```bash
 ln -s "$PWD" ~/.vscode/extensions/cc-worktree-nav
-# 然后重启 VSCode（之后改代码只需 Cmd+Shift+P → Reload Window）
+# restart VS Code once; after that, code changes only need Cmd+Shift+P -> Reload Window
 ```
 
-## 用法
+## Usage
 
-- **活动栏 Worktrees 图标** — 打开面板，浏览所有 worktree 的文件树
-- **`Cmd+Alt+P`** — 跨所有 worktree 快速打开文件（右键单个 worktree 可只搜它）
-- **编辑器右上角按钮**（只在 Claude session tab 上出现）— 定位当前 Claude session 的 worktree，并在侧栏展开选中；命中的那个 worktree 图标会变绿
+- **Worktrees icon in the activity bar** — pick a worktree from the list to open its file tree below. Several can be open at once; the set survives a window reload.
+- **`Cmd+Alt+P`** — fuzzy search across the opened worktrees. Type `@` to switch scope: all worktrees, just the opened ones, or a single one. Choosing one leaves an `@name ` tag in the box, and a backspace that touches the tag removes it whole.
+- **The editor title bar button** (only shown on a Claude Code session tab) — resolves the worktree of that session, opens it in the sidebar and marks it green.
 
-worktree 的发现方式：对每个 workspace folder 向下扫 `repoScanDepth`（默认 2）层找 git 仓库，再对每个仓库跑 `git worktree list`。所以 `foo.worktrees/*` 和 `foo/.claude/worktrees/*` 两种布局都能覆盖。
+Git status is painted onto the file tree the way the Explorer does it — badges and colors from the same `gitDecoration.*` theme keys, directories tinted by the most urgent state below them, and a `~5 +3 -1` tally on each worktree row. The built-in git extension does not decorate worktrees living outside the workspace, hence the extension's own decoration provider. Status is read only for opened worktrees, and refreshes on save, on file add/remove, and whenever the window regains focus (which covers commits made in a terminal).
 
-被 `git worktree prune` 掉、但目录和文件还在的孤儿 worktree 会标为 `stale` 一并列出（用目录遍历而非 git 来索引），免得那些文件彻底找不到。
+## How worktrees are discovered
 
-## Session → worktree 是怎么匹配的
+Each workspace folder is scanned `repoScanDepth` levels down (2 by default) for git repositories, then `git worktree list` runs once per repository. Both the `foo.worktrees/*` and `foo/.claude/worktrees/*` layouts are therefore covered.
 
-分两步。
+Orphan directories left behind by `git worktree prune` — the metadata is gone but the files are still on disk — are listed as `stale` and indexed by walking the directory instead of asking git, so those files do not become unreachable.
 
-**第一步：确定是哪个 session。** Claude Code 的会话 tab，它的 label 会写进 transcript 的 `customTitle`（你手动重命名的名字）或 `aiTitle`（没改过时自动生成的）。所以读活跃 tab 的 label，反查 transcript 就能唯一锁定 session —— 而不是猜「最近活跃的那个」。tab 标题在 UI 里被截断时有前缀匹配兜底。
+## How a session is matched to a worktree
 
-只有当活跃 tab 不是 CC 会话 tab 时（比如 CC 开在侧栏），才退回按 transcript mtime 取最近活跃的 session。
+Two steps.
 
-**第二步：确定 session 在哪。** 从该 transcript 尾部往前找最后一条带 `cwd` 的记录，然后：
+**Which session.** A Claude Code session tab's label is written into its transcript as `customTitle` (when renamed by hand) or `aiTitle` (auto-generated, present on every session). Reading the active tab's label and looking it up therefore identifies exactly one session, rather than guessing at "the most recent one". A prefix match covers labels elided in the UI.
 
-1. `cwd` 落在某个 worktree 目录内 → 命中（多个匹配取最深的，因为 `.claude/worktrees/x` 同时也在主 checkout 内）
-2. 否则拿 `gitBranch` 去对 worktree 的分支 —— CC 在 worktree 里干活时 `cwd` 有可能还是主 checkout，只有分支变了，所以这条通道是必要的
+Only when the active tab is not a session tab — Claude docked in the sidebar, for instance — does it fall back to the most recently active transcript by mtime.
 
-**一旦靠 tab 标题锁定了 session，就认这一个结果。** 匹配不到 worktree 是有意义的结论（说明这个 session 在主 checkout），此时提示「在主 checkout xxx，分支 yyy」并停下，绝不继续往下找别的 session —— 否则就会跳到一个跟当前 tab 毫无关系的 worktree 去。
+**Where that session is.** Walk that transcript backwards to the last record carrying `cwd`, then:
 
-## 已知边界
+1. `cwd` falls inside a worktree → matched. The deepest match wins, since `.claude/worktrees/x` also sits inside the main checkout.
+2. Otherwise match `gitBranch` against each worktree's branch. Claude working inside a worktree may still report the main checkout as `cwd`, with only the branch changed, so this second channel is load-bearing.
 
-- CC 开在**侧栏**而不是编辑器 tab 时，拿不到 tab 标题，只能退回按 mtime 取最近活跃的 session —— 多个 session 并行时可能不是你正在看的那个。
-- 靠 tab 标题反查 session 依赖标题唯一。两个 session 起了同名标题时，取 mtime 较新的那个。
-- 文件树是只读浏览 + 打开，没有新建/重命名/删除。
+**Once a tab label has pinned a session down, that result stands.** Matching no worktree is a meaningful answer — the session is on the main checkout — and it reports that and stops. Falling through to some other session is exactly how you end up jumping to a worktree that has nothing to do with the tab in front of you.
 
-## 调试
+## Known limits
+
+- With Claude docked in the sidebar rather than an editor tab there is no tab label to read, so detection falls back to mtime and may not pick the session you are looking at.
+- Looking a session up by tab label assumes labels are unique. Two sessions sharing a title resolve to the more recent transcript.
+- The file tree browses and opens. It does not create, rename or delete.
+
+## Debugging
 
 ```bash
-node src/core.js ~/Projects   # 不启动 VSCode，直接看 worktree 发现和 session 匹配结果
+node src/core.js ~/code   # worktree discovery and session matching, without starting VS Code
 ```
+
+## License
+
+MIT

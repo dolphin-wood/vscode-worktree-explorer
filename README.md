@@ -14,9 +14,9 @@ that can actually see them, and git status painted the way the Explorer paints i
 tallies, two of them opened below as file trees with status badges, and a file search scoped
 to one worktree](docs/screenshot.png)
 
-*Three worktrees of one repository. The top pane lists them with their branch and a `~2 +1`
-tally of uncommitted work; two are opened below as file trees, with status badges on the
-changed files. The search is scoped to `dark-mode` through the `@` tag in the input.*
+*Three worktrees of one repository. The top pane lists each with a `~2 +1` tally of its
+uncommitted work, then its branch; two are opened below as file trees, with status badges on
+the changed files. The search is scoped to `dark-mode` through the `@` tag in the input.*
 
 ## Install
 

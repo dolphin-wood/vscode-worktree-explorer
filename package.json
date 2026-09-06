@@ -47,43 +47,71 @@
       {
         "command": "worktreeExplorer.refresh",
         "title": "Refresh",
-        "icon": "$(refresh)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(refresh)"
       },
       {
         "command": "worktreeExplorer.quickOpen",
         "title": "Search Files...",
-        "icon": "$(search)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(search)"
       },
       {
         "command": "worktreeExplorer.quickOpenInWorktree",
         "title": "Search Files in This Worktree...",
-        "icon": "$(search)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(search)"
       },
       {
         "command": "worktreeExplorer.revealSessionWorktree",
         "title": "Open Worktree of Current Claude Session",
-        "icon": "$(root-folder)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(root-folder)"
       },
       {
         "command": "worktreeExplorer.openWorktree",
         "title": "Open Worktree",
-        "icon": "$(add)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(add)"
       },
       {
         "command": "worktreeExplorer.closeWorktree",
         "title": "Close Worktree",
-        "icon": "$(close)",
-        "category": "Worktrees"
+        "category": "Worktrees",
+        "icon": "$(close)"
       },
       {
         "command": "worktreeExplorer.closeAllWorktrees",
         "title": "Close All Opened Worktrees",
-        "icon": "$(clear-all)",
+        "category": "Worktrees",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "worktreeExplorer.openToSide",
+        "title": "Open to the Side",
+        "category": "Worktrees",
+        "icon": "$(split-horizontal)"
+      },
+      {
+        "command": "worktreeExplorer.newFile",
+        "title": "New File...",
+        "category": "Worktrees",
+        "icon": "$(new-file)"
+      },
+      {
+        "command": "worktreeExplorer.newFolder",
+        "title": "New Folder...",
+        "category": "Worktrees",
+        "icon": "$(new-folder)"
+      },
+      {
+        "command": "worktreeExplorer.rename",
+        "title": "Rename...",
+        "category": "Worktrees"
+      },
+      {
+        "command": "worktreeExplorer.delete",
+        "title": "Delete",
         "category": "Worktrees"
       },
       {
@@ -94,6 +122,11 @@
       {
         "command": "worktreeExplorer.copyPath",
         "title": "Copy Path",
+        "category": "Worktrees"
+      },
+      {
+        "command": "worktreeExplorer.copyRelativePath",
+        "title": "Copy Relative Path",
         "category": "Worktrees"
       },
       {
@@ -142,29 +175,64 @@
           "group": "inline@2"
         },
         {
-          "command": "worktreeExplorer.closeWorktree",
+          "command": "worktreeExplorer.newFile",
           "when": "viewItem == wtxOpenedRoot",
           "group": "inline@3"
         },
         {
-          "command": "worktreeExplorer.openTerminalHere",
-          "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
-          "group": "1_run@1"
+          "command": "worktreeExplorer.closeWorktree",
+          "when": "viewItem == wtxOpenedRoot",
+          "group": "inline@4"
         },
         {
-          "command": "worktreeExplorer.copyPath",
-          "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
-          "group": "2_copy@1"
+          "command": "worktreeExplorer.openToSide",
+          "when": "viewItem == wtxFile",
+          "group": "navigation@1"
+        },
+        {
+          "command": "worktreeExplorer.newFile",
+          "when": "viewItem == wtxOpenedRoot || viewItem == wtxDir",
+          "group": "1_new@1"
+        },
+        {
+          "command": "worktreeExplorer.newFolder",
+          "when": "viewItem == wtxOpenedRoot || viewItem == wtxDir",
+          "group": "1_new@2"
         },
         {
           "command": "worktreeExplorer.revealInFinder",
           "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
-          "group": "2_copy@2"
+          "group": "2_workspace@1"
+        },
+        {
+          "command": "worktreeExplorer.openTerminalHere",
+          "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
+          "group": "2_workspace@2"
         },
         {
           "command": "worktreeExplorer.openInNewWindow",
           "when": "viewItem == wtxListItem || viewItem == wtxOpenedRoot",
-          "group": "3_open@1"
+          "group": "2_workspace@3"
+        },
+        {
+          "command": "worktreeExplorer.copyPath",
+          "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
+          "group": "5_copy@1"
+        },
+        {
+          "command": "worktreeExplorer.copyRelativePath",
+          "when": "view == worktreeExplorer.list || view == worktreeExplorer.files",
+          "group": "5_copy@2"
+        },
+        {
+          "command": "worktreeExplorer.rename",
+          "when": "viewItem == wtxDir || viewItem == wtxFile",
+          "group": "7_modification@1"
+        },
+        {
+          "command": "worktreeExplorer.delete",
+          "when": "viewItem == wtxDir || viewItem == wtxFile",
+          "group": "7_modification@2"
         }
       ],
       "editor/title": [
@@ -181,6 +249,10 @@
         },
         {
           "command": "worktreeExplorer.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.copyRelativePath",
           "when": "false"
         },
         {
@@ -201,6 +273,26 @@
         },
         {
           "command": "worktreeExplorer.closeWorktree",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.openToSide",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.newFile",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.newFolder",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.rename",
+          "when": "false"
+        },
+        {
+          "command": "worktreeExplorer.delete",
           "when": "false"
         }
       ]

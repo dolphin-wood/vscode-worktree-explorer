@@ -241,6 +241,9 @@ class FilesProvider {
     return item;
   }
 
+  /** Repaint without dropping the node cache, so expanded folders stay expanded. */
+  refreshTree() { this._emitter.fire(); }
+
   nodeFor(wt) { return this.node('worktree', wt.path, wt, undefined); }
 
   /**
@@ -552,7 +555,7 @@ async function quickOpenFiles(store, initialScope) {
     if (sel.scope) { await applyScope(sel.scope); return; } // scope chosen, keep the picker open
     if (sel.p) {
       qp.hide();
-      await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(sel.p), { preview: false });
+      await vscode.commands.executeCommand('vscode.open', vscode.Uri.file(sel.p));
     }
   });
 
@@ -571,7 +574,7 @@ function activate(context) {
 
   const listView = vscode.window.createTreeView('worktreeExplorer.list', { treeDataProvider: listProvider });
   const filesView = vscode.window.createTreeView('worktreeExplorer.files', {
-    treeDataProvider: filesProvider, showCollapseAll: true,
+    treeDataProvider: filesProvider, showCollapseAll: true, canSelectMany: true,
   });
   context.subscriptions.push(listView, filesView);
   vscode.commands.executeCommand('setContext', 'worktreeExplorer.hasOpened', store.opened.length > 0);
@@ -688,6 +691,52 @@ function activate(context) {
     revealPath(uri.fsPath);
   };
 
+  /**
+   * One recursive watcher per opened worktree. Without this the tree only ever changed when
+   * something in this window changed it - an agent or a terminal creating files left it stale
+   * until a manual refresh. Watchers are torn down when a worktree is closed, so the cost
+   * tracks what is actually on screen.
+   */
+  const fileWatchers = new Map();
+  let treeTimer;
+  const refreshTreeSoon = () => {
+    clearTimeout(treeTimer);
+    treeTimer = setTimeout(() => filesProvider.refreshTree(), 400);
+  };
+  const syncWatchers = () => {
+    const opened = new Set(store.openedWorktrees().map((w) => w.path));
+    for (const [p, d] of [...fileWatchers]) {
+      if (!opened.has(p)) { d.dispose(); fileWatchers.delete(p); }
+    }
+    for (const p of opened) {
+      if (fileWatchers.has(p)) continue;
+      const w = vscode.workspace.createFileSystemWatcher(
+        new vscode.RelativePattern(vscode.Uri.file(p), '**/*'),
+      );
+      const structural = () => { refreshTreeSoon(); gitStatus.schedule(); };
+      fileWatchers.set(p, vscode.Disposable.from(
+        w,
+        w.onDidCreate(structural),
+        w.onDidDelete(structural),
+        w.onDidChange(() => gitStatus.schedule()), // content only: status moves, tree does not
+      ));
+    }
+  };
+  store.onChange(syncWatchers);
+  context.subscriptions.push(new vscode.Disposable(() => {
+    for (const d of fileWatchers.values()) d.dispose();
+    fileWatchers.clear();
+  }));
+
+  // Commands may be invoked on one item or on a multi-selection.
+  const selected = (node, nodes) => (nodes && nodes.length ? nodes : node ? [node] : []);
+  /** The directory an item represents, or the one holding it. */
+  const dirOf = (x) => {
+    if (!x || !x.path) return null;
+    return x.kind === 'file' ? path.dirname(x.path) : x.path;
+  };
+  const rootOf = (x) => (x && x.wt ? x.wt.path : null);
+
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
   reg('worktreeExplorer.refresh', () => {
@@ -705,10 +754,106 @@ function activate(context) {
     const wt = wtOf(x);
     return quickOpenFiles(store, wt && wt.path ? { kind: 'wt', wt } : { kind: 'opened' });
   });
-  reg('worktreeExplorer.copyPath', async (x) => {
-    if (!x || !x.path) return;
-    await vscode.env.clipboard.writeText(x.path);
-    vscode.window.setStatusBarMessage(`$(clippy) Copied ${x.path}`, 2500);
+  reg('worktreeExplorer.copyPath', async (x, xs) => {
+    const items = selected(x, xs).filter((i) => i && i.path);
+    if (!items.length) return;
+    const text = items.map((i) => i.path).join('\n');
+    await vscode.env.clipboard.writeText(text);
+    vscode.window.setStatusBarMessage(`$(clippy) Copied ${items.length > 1 ? `${items.length} paths` : text}`, 2500);
+  });
+  reg('worktreeExplorer.copyRelativePath', async (x, xs) => {
+    const items = selected(x, xs).filter((i) => i && i.path);
+    if (!items.length) return;
+    // Relative to the worktree the item belongs to, which is the root shown in the tree.
+    const text = items.map((i) => {
+      const root = rootOf(i);
+      return root ? path.relative(root, i.path) || path.basename(i.path) : i.path;
+    }).join('\n');
+    await vscode.env.clipboard.writeText(text);
+    vscode.window.setStatusBarMessage(`$(clippy) Copied ${items.length > 1 ? `${items.length} paths` : text}`, 2500);
+  });
+  reg('worktreeExplorer.openToSide', (x) => {
+    if (x && x.path && x.kind === 'file') {
+      vscode.commands.executeCommand('vscode.open', vscode.Uri.file(x.path), vscode.ViewColumn.Beside);
+    }
+  });
+
+  const nameBox = async (title, value, dir) => {
+    const taken = new Set(core.readDirEntries(dir, { excludeDirs: [] }).map((e) => e.name));
+    return vscode.window.showInputBox({
+      title,
+      value,
+      valueSelection: value ? [0, value.lastIndexOf('.') > 0 ? value.lastIndexOf('.') : value.length] : undefined,
+      validateInput: (v) => {
+        const t = v.trim();
+        if (!t) return 'A name is required';
+        if (t === '.' || t === '..' || t.includes('/') || t.includes('\\')) return 'Not a valid name';
+        if (t !== value && taken.has(t)) return `'${t}' already exists here`;
+        return null;
+      },
+    });
+  };
+
+  reg('worktreeExplorer.newFile', async (x) => {
+    const dir = dirOf(x);
+    if (!dir) return;
+    const name = await nameBox('New File', '', dir);
+    if (!name) return;
+    const uri = vscode.Uri.file(path.join(dir, name.trim()));
+    try {
+      await vscode.workspace.fs.writeFile(uri, new Uint8Array());
+      await vscode.commands.executeCommand('vscode.open', uri);
+    } catch (e) {
+      vscode.window.showErrorMessage(`Could not create the file: ${e.message}`);
+    }
+  });
+
+  reg('worktreeExplorer.newFolder', async (x) => {
+    const dir = dirOf(x);
+    if (!dir) return;
+    const name = await nameBox('New Folder', '', dir);
+    if (!name) return;
+    try {
+      await vscode.workspace.fs.createDirectory(vscode.Uri.file(path.join(dir, name.trim())));
+      refreshTreeSoon();
+    } catch (e) {
+      vscode.window.showErrorMessage(`Could not create the folder: ${e.message}`);
+    }
+  });
+
+  reg('worktreeExplorer.rename', async (x) => {
+    if (!x || !x.path || x.kind === 'worktree') return;
+    const dir = path.dirname(x.path);
+    const name = await nameBox('Rename', path.basename(x.path), dir);
+    if (!name || name.trim() === path.basename(x.path)) return;
+    const target = vscode.Uri.file(path.join(dir, name.trim()));
+    try {
+      // workspace.fs.rename updates open editors and lets other extensions react.
+      await vscode.workspace.fs.rename(vscode.Uri.file(x.path), target, { overwrite: false });
+    } catch (e) {
+      vscode.window.showErrorMessage(`Could not rename: ${e.message}`);
+    }
+  });
+
+  reg('worktreeExplorer.delete', async (x, xs) => {
+    const items = selected(x, xs).filter((i) => i && i.path && i.kind !== 'worktree');
+    if (!items.length) return;
+    const what = items.length === 1
+      ? `'${path.basename(items[0].path)}'`
+      : `${items.length} items`;
+    const ok = await vscode.window.showWarningMessage(
+      `Delete ${what}?`,
+      { modal: true, detail: 'The item goes to the trash and can be restored from there.' },
+      'Move to Trash',
+    );
+    if (ok !== 'Move to Trash') return;
+    for (const i of items) {
+      try {
+        await vscode.workspace.fs.delete(vscode.Uri.file(i.path), { recursive: true, useTrash: true });
+      } catch (e) {
+        vscode.window.showErrorMessage(`Could not delete ${path.basename(i.path)}: ${e.message}`);
+      }
+    }
   });
   reg('worktreeExplorer.revealInFinder', (x) => {
     if (x && x.path) vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(x.path));
@@ -761,6 +906,7 @@ function activate(context) {
 
   syncFilesTitle();
   syncTabContext();
+  syncWatchers();
   followEditor(vscode.window.activeTextEditor);
   gitStatus.schedule(600);
   if (cfg().get('autoRevealOnStartup')) setTimeout(() => revealSession({ quiet: true }), 1500);

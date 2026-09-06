@@ -30,6 +30,11 @@ each with its branch and a `~5 +3 -1` tally of its git status. Click one to open
 and the set is remembered across window reloads. Files open in the current window like any
 other file — no new window, nothing reloaded.
 
+It works like the Explorer where it can: multi-select, open to the side, new file and folder,
+rename, delete to the trash, copy path and copy relative path. Each opened worktree is watched,
+so files an agent or a terminal creates outside this window show up on their own instead of
+waiting for a manual refresh.
+
 The tree follows the active editor: switch to a tab and its file is revealed and selected,
 the way the Explorer's `autoReveal` does. It only acts while the view is visible, so it never
 forces this sidebar open on a tab switch; a file opened while it was hidden is revealed when
@@ -119,7 +124,6 @@ files do not quietly become unreachable.
 
 ## Limitations
 
-- The file tree browses and opens. It does not create, rename or delete.
 - Session detection needs the session to be an editor tab. With Claude Code docked in the
   sidebar there is no label to read, so it falls back to the most recent transcript by
   modification time, which may not be the session you are looking at.

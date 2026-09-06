@@ -10,6 +10,14 @@ because worktrees typically live outside the workspace or behind a `.gitignore` 
 This extension gives them a home in the current window: a sidebar to browse them, a search
 that can actually see them, and git status painted the way the Explorer paints it.
 
+![The Worktrees sidebar listing three worktrees of one repository with their branches and git
+tallies, two of them opened below as file trees with status badges, and a file search scoped
+to one worktree](docs/screenshot.png)
+
+*Three worktrees of one repository. The top pane lists them with their branch and a `~2 +1`
+tally of uncommitted work; two are opened below as file trees, with status badges on the
+changed files. The search is scoped to `dark-mode` through the `@` tag in the input.*
+
 ## Install
 
 ```bash

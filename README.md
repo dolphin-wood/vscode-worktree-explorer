@@ -21,6 +21,16 @@ is scoped to `dark-mode` through the `@` tag in the input.*
 
 ## Install
 
+Grab the `.vsix` from the [latest release](https://github.com/dolphin-wood/vscode-worktree-explorer/releases/latest), then:
+
+```bash
+code --install-extension vscode-worktree-explorer-0.1.0.vsix
+```
+
+Or from inside VS Code: Extensions view, the `...` menu, **Install from VSIX...**
+
+To run it from source instead, symlink the checkout into the extensions directory:
+
 ```bash
 git clone https://github.com/dolphin-wood/vscode-worktree-explorer
 ln -s "$PWD/vscode-worktree-explorer" ~/.vscode/extensions/vscode-worktree-explorer

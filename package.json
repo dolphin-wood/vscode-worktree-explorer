@@ -1,0 +1,300 @@
+{
+  "name": "cc-worktree-nav",
+  "displayName": "CC Worktree Nav",
+  "description": "Browse and search git worktrees in the current window, and jump to the worktree of the active Claude Code session.",
+  "version": "0.1.0",
+  "publisher": "daofeng",
+  "private": true,
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "Other",
+    "SCM Providers"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "ccWorktreeNav",
+          "title": "Worktrees",
+          "icon": "media/worktree.svg"
+        }
+      ]
+    },
+    "views": {
+      "ccWorktreeNav": [
+        {
+          "id": "ccWorktreeNav.list",
+          "name": "Worktrees"
+        },
+        {
+          "id": "ccWorktreeNav.files",
+          "name": "Opened"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "ccwt.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.quickOpen",
+        "title": "Search Files...",
+        "icon": "$(search)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.quickOpenInWorktree",
+        "title": "Search Files in This Worktree...",
+        "icon": "$(search)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.revealSessionWorktree",
+        "title": "Open Worktree of Current Claude Session",
+        "icon": "$(root-folder)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.openWorktree",
+        "title": "Open Worktree",
+        "icon": "$(add)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.closeWorktree",
+        "title": "Close Worktree",
+        "icon": "$(close)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.closeAllWorktrees",
+        "title": "Close All Opened Worktrees",
+        "icon": "$(clear-all)",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.openInNewWindow",
+        "title": "Open Worktree in New Window",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.copyPath",
+        "title": "Copy Path",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.revealInFinder",
+        "title": "Reveal in Finder",
+        "category": "Worktrees"
+      },
+      {
+        "command": "ccwt.openTerminalHere",
+        "title": "Open Terminal Here",
+        "category": "Worktrees"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "ccwt.revealSessionWorktree",
+          "when": "view == ccWorktreeNav.list",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ccwt.refresh",
+          "when": "view == ccWorktreeNav.list",
+          "group": "navigation@2"
+        },
+        {
+          "command": "ccwt.quickOpen",
+          "when": "view == ccWorktreeNav.files",
+          "group": "navigation@1"
+        },
+        {
+          "command": "ccwt.closeAllWorktrees",
+          "when": "view == ccWorktreeNav.files",
+          "group": "navigation@2"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "ccwt.openWorktree",
+          "when": "view == ccWorktreeNav.list && viewItem == ccwtListItem",
+          "group": "inline@1"
+        },
+        {
+          "command": "ccwt.quickOpenInWorktree",
+          "when": "viewItem == ccwtListItem || viewItem == ccwtOpenedRoot",
+          "group": "inline@2"
+        },
+        {
+          "command": "ccwt.closeWorktree",
+          "when": "viewItem == ccwtOpenedRoot",
+          "group": "inline@3"
+        },
+        {
+          "command": "ccwt.openTerminalHere",
+          "when": "view == ccWorktreeNav.list || view == ccWorktreeNav.files",
+          "group": "1_run@1"
+        },
+        {
+          "command": "ccwt.copyPath",
+          "when": "view == ccWorktreeNav.list || view == ccWorktreeNav.files",
+          "group": "2_copy@1"
+        },
+        {
+          "command": "ccwt.revealInFinder",
+          "when": "view == ccWorktreeNav.list || view == ccWorktreeNav.files",
+          "group": "2_copy@2"
+        },
+        {
+          "command": "ccwt.openInNewWindow",
+          "when": "viewItem == ccwtListItem || viewItem == ccwtOpenedRoot",
+          "group": "3_open@1"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "ccwt.revealSessionWorktree",
+          "when": "config.ccWorktreeNav.showEditorTitleButton",
+          "group": "navigation@-1"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "ccwt.quickOpenInWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.copyPath",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.revealInFinder",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.openInNewWindow",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.openTerminalHere",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.openWorktree",
+          "when": "false"
+        },
+        {
+          "command": "ccwt.closeWorktree",
+          "when": "false"
+        }
+      ]
+    },
+    "keybindings": [
+      {
+        "command": "ccwt.quickOpen",
+        "key": "cmd+alt+p",
+        "mac": "cmd+alt+p",
+        "win": "ctrl+alt+p",
+        "linux": "ctrl+alt+p"
+      }
+    ],
+    "configuration": {
+      "title": "CC Worktree Nav",
+      "properties": {
+        "ccWorktreeNav.showEditorTitleButton": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the \"Open Worktree of Current Claude Session\" button in the editor title bar."
+        },
+        "ccWorktreeNav.includeMainCheckout": {
+          "type": "boolean",
+          "default": false,
+          "description": "Also list the main checkout (not a linked worktree). Off by default since it is usually already in the Explorer."
+        },
+        "ccWorktreeNav.extraWorktreeRoots": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional git repository paths to discover worktrees from, for repos outside the workspace folders."
+        },
+        "ccWorktreeNav.excludeDirs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            ".git",
+            "node_modules",
+            ".next",
+            "dist",
+            "build",
+            ".turbo",
+            "coverage",
+            "__pycache__",
+            ".venv"
+          ],
+          "description": "Directory names hidden in the file tree."
+        },
+        "ccWorktreeNav.quickOpenMaxFiles": {
+          "type": "number",
+          "default": 20000,
+          "description": "Maximum number of files indexed per worktree for search."
+        },
+        "ccWorktreeNav.autoRevealOnStartup": {
+          "type": "boolean",
+          "default": false,
+          "description": "On window startup, automatically open the worktree of the current Claude session."
+        },
+        "ccWorktreeNav.claudeHome": {
+          "type": "string",
+          "default": "",
+          "description": "Claude Code home directory. Empty means ~/.claude (or $CLAUDE_CONFIG_DIR)."
+        },
+        "ccWorktreeNav.useFileIcons": {
+          "type": "boolean",
+          "default": true,
+          "description": "Use the file icon theme for the file tree. This also applies git decorations; turn it off if worktrees ignored by the parent repo show up greyed out."
+        },
+        "ccWorktreeNav.repoScanDepth": {
+          "type": "number",
+          "default": 2,
+          "description": "How many levels below each workspace folder to scan when discovering git repositories."
+        },
+        "ccWorktreeNav.searchScopeFallback": {
+          "type": "string",
+          "enum": [
+            "all",
+            "opened"
+          ],
+          "default": "all",
+          "description": "Default search scope when no worktree is opened."
+        },
+        "ccWorktreeNav.showGitStatus": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show git status colors and badges on the file tree, the way the Explorer does. Status is read only for opened worktrees."
+        }
+      }
+    },
+    "viewsWelcome": [
+      {
+        "view": "ccWorktreeNav.files",
+        "contents": "No worktree opened yet.\n\nPick one from the Worktrees list above to browse its files here.\n\n[Open Worktree of Current Claude Session](command:ccwt.revealSessionWorktree)"
+      }
+    ]
+  }
+}

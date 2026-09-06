@@ -1,93 +1,130 @@
 # Worktree Explorer
 
-Browse and search the files of your git worktrees **inside the current VS Code window**, and jump straight to the worktree the active Claude Code session is working in.
+Work with git worktrees without leaving the VS Code window you are already in.
 
-No new window, so a running Claude Code session is never lost to a reload.
+`git worktree` is the clean way to have several branches checked out at once, but VS Code
+meets it halfway at best. Opening a worktree means a new window, which discards everything
+the current one had loaded. Leaving it where it is means `Cmd+P` cannot find its files,
+because worktrees typically live outside the workspace or behind a `.gitignore` line.
 
-## What it solves
-
-| Problem | How |
-|---|---|
-| `Cmd+P` cannot find files under a worktree | A separate file index behind its own quick open (`Cmd+Alt+P`). Files come from `git ls-files`, so `.gitignore` is honoured for free and `node_modules` never pollutes the results |
-| No explorer for worktrees | A **Worktrees** container in the activity bar: the worktree list on top, file trees of the opened ones below |
-| Sessions and worktrees do not line up | The active tab's label pins down the session, then its transcript's `cwd` / `gitBranch` are matched against `git worktree list` |
+This extension gives them a home in the current window: a sidebar to browse them, a search
+that can actually see them, and git status painted the way the Explorer paints it.
 
 ## Install
 
 ```bash
-ln -s "$PWD" ~/.vscode/extensions/vscode-worktree-explorer
-# restart VS Code once; after that, code changes only need Cmd+Shift+P -> Reload Window
+git clone https://github.com/dolphin-wood/vscode-worktree-explorer
+ln -s "$PWD/vscode-worktree-explorer" ~/.vscode/extensions/vscode-worktree-explorer
 ```
 
-## Usage
+Restart VS Code once. After that, code changes only need `Cmd+Shift+P` → **Reload Window**.
 
-- **Worktrees icon in the activity bar** — pick a worktree from the list to open its file tree below. Several can be open at once; the set survives a window reload.
-- **`Cmd+Alt+P`** — fuzzy search across the opened worktrees. Type `@` to switch scope: all worktrees, just the opened ones, or a single one. Choosing one leaves an `@name ` tag in the box, and a backspace that touches the tag removes it whole.
-- **The editor title bar button** (only shown on a Claude Code session tab) — resolves the worktree of that session, opens it in the sidebar and marks it green.
+## The sidebar
 
-Git status is painted onto the file tree the way the Explorer does it — badges and colors from the same `gitDecoration.*` theme keys, directories tinted by the most urgent state below them, and a `~5 +3 -1` tally on each worktree row. The built-in git extension does not decorate worktrees living outside the workspace, hence the extension's own decoration provider. Status is read only for opened worktrees, and refreshes on save, on file add/remove, and whenever the window regains focus (which covers commits made in a terminal).
+The **Worktrees** container in the activity bar has two panes.
+
+**Worktrees** lists every worktree of every git repository under your workspace folders,
+each with its branch and a `~5 +3 -1` tally of its git status. Click one to open it.
+
+**Opened** holds the file trees of the worktrees you opened. Several can be open at once,
+and the set is remembered across window reloads. Files open in the current window like any
+other file — no new window, nothing reloaded.
+
+## Search
+
+`Cmd+Alt+P` (`Ctrl+Alt+P` on Windows and Linux) opens a fuzzy file search over the opened
+worktrees.
+
+Type `@` to change the scope: all worktrees, just the opened ones, or a single one. Picking
+one leaves an `@name ` tag in the input, and a backspace that reaches the tag deletes it
+whole. The current scope is spelled out in the title bar.
+
+Indexing uses `git ls-files`, which is fast and honours `.gitignore` for free — `node_modules`
+and build output never reach the results. The index is cached for a minute per worktree.
+
+## Git status
+
+Files carry the same badges and colors the Explorer uses, from the same `gitDecoration.*`
+theme keys, so they follow your color theme. Directories are tinted by the most urgent state
+anywhere below them: conflict beats deleted beats modified beats renamed beats added beats
+untracked.
+
+VS Code's built-in git extension does not decorate worktrees that live outside the workspace,
+which is why this extension provides its own decorations. Status is read only for the opened
+worktrees — running `git status` across every worktree on every refresh would cost far more
+than it is worth. It refreshes on save, on file add and remove, and whenever the window
+regains focus, which covers commits you make in a terminal.
+
+## Optional: jump to your coding agent's worktree
+
+Everything above is independent of any coding agent. If you use one that works inside
+worktrees, a button in the editor title bar resolves the worktree the active session is in,
+opens it, and marks it green.
+
+Implemented for **Claude Code** today. Each session is its own editor tab, and its label is
+recorded in the session transcript, so the label identifies the session exactly rather than
+by guesswork. That transcript's last `cwd` then locates the worktree, falling back to its
+`gitBranch` when `cwd` is still the main checkout — which happens, since an agent may switch
+branches without changing directory. Matching no worktree is a real answer, not a failure:
+the session is on the main checkout, so it reports that and stops rather than jumping to an
+unrelated worktree.
+
+Other agents mostly fit. Codex, for one, records the same `cwd` and `git.branch` in
+`~/.codex/sessions/**/rollout-*.jsonl`. What does not carry over is identifying the *active*
+session, which here depends on sessions being editor tabs with readable labels; Codex lives
+in a chat sidebar, where there is no label to read. The plan is to put detection behind a
+small per-agent interface and let each agent identify its active session however its surface
+allows. Contributions welcome.
+
+## Settings
+
+| Setting | Default | |
+|---|---|---|
+| `worktreeExplorer.repoScanDepth` | `2` | Levels below each workspace folder to scan for git repositories |
+| `worktreeExplorer.extraWorktreeRoots` | `[]` | Extra repository paths, for repos outside the workspace |
+| `worktreeExplorer.includeMainCheckout` | `false` | Also list the main checkout, which is usually already in the Explorer |
+| `worktreeExplorer.excludeDirs` | `.git`, `node_modules`, `.next`, `dist`, `build`, `.turbo`, `coverage`, `__pycache__`, `.venv` | Directory names hidden in the file tree |
+| `worktreeExplorer.useFileIcons` | `true` | Use the file icon theme. Turn off if worktrees ignored by the parent repo appear greyed out |
+| `worktreeExplorer.showGitStatus` | `true` | Git colors and badges on the file tree |
+| `worktreeExplorer.quickOpenMaxFiles` | `20000` | Index cap per worktree |
+| `worktreeExplorer.searchScopeFallback` | `all` | Scope used when no worktree is open |
+| `worktreeExplorer.showEditorTitleButton` | `true` | The title bar button, shown only on an agent session tab |
+| `worktreeExplorer.autoRevealOnStartup` | `false` | Open the active agent session's worktree on startup |
+| `worktreeExplorer.claudeHome` | `""` | Claude Code home. Empty means `~/.claude` or `$CLAUDE_CONFIG_DIR` |
 
 ## How worktrees are discovered
 
-Each workspace folder is scanned `repoScanDepth` levels down (2 by default) for git repositories, then `git worktree list` runs once per repository. Both the `foo.worktrees/*` and `foo/.claude/worktrees/*` layouts are therefore covered.
+Every workspace folder is scanned `repoScanDepth` levels down for git repositories, then
+`git worktree list` runs once per repository, collapsed by `--git-common-dir` so a repo
+reached from several entry points is only asked once. The layout comes from git, not from a
+convention imposed here, so `foo.worktrees/*`, `foo/.claude/worktrees/*` and anything else
+all work.
 
-Orphan directories left behind by `git worktree prune` — the metadata is gone but the files are still on disk — are listed as `stale` and indexed by walking the directory instead of asking git, so those files do not become unreachable.
+Orphan directories left by `git worktree prune` — metadata gone, files still on disk — are
+listed as `stale` and indexed by walking the directory rather than asking git, so their
+files do not quietly become unreachable.
 
-## How a session is matched to a worktree
+## Limitations
 
-Two steps.
-
-**Which session.** A Claude Code session tab's label is written into its transcript as `customTitle` (when renamed by hand) or `aiTitle` (auto-generated, present on every session). Reading the active tab's label and looking it up therefore identifies exactly one session, rather than guessing at "the most recent one". A prefix match covers labels elided in the UI.
-
-Only when the active tab is not a session tab — Claude docked in the sidebar, for instance — does it fall back to the most recently active transcript by mtime.
-
-**Where that session is.** Walk that transcript backwards to the last record carrying `cwd`, then:
-
-1. `cwd` falls inside a worktree → matched. The deepest match wins, since `.claude/worktrees/x` also sits inside the main checkout.
-2. Otherwise match `gitBranch` against each worktree's branch. Claude working inside a worktree may still report the main checkout as `cwd`, with only the branch changed, so this second channel is load-bearing.
-
-**Once a tab label has pinned a session down, that result stands.** Matching no worktree is a meaningful answer — the session is on the main checkout — and it reports that and stops. Falling through to some other session is exactly how you end up jumping to a worktree that has nothing to do with the tab in front of you.
-
-## Roadmap: other agents
-
-Browsing and search are agent-agnostic; they only need git. Session detection is the part
-that has to reach into an agent's own state, and today that means Claude Code only.
-
-Matching a session to a worktree is the easy half and generalises well — **Codex** records
-the same two signals in `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, under
-`session_meta.payload`:
-
-```json
-{ "cwd": "/path/to/checkout",
-  "git": { "branch": "main", "commit_hash": "...", "repository_url": "..." } }
-```
-
-The hard half is the other one: deciding *which* session you are looking at. For Claude Code
-that falls out of the editor tab label, since each session is its own tab. Codex lives in a
-chat sidebar instead — there is no tab, therefore no label, and the trick does not carry over.
-Something else has to stand in for it, and none of the candidates is as clean:
-
-- Fall back to the most recently written transcript. Works, but picks the wrong session
-  whenever several run in parallel — exactly the case this extension exists for.
-- Read whatever state the sidebar extension exposes, if it exposes any.
-- Let the user pin a session to a worktree by hand, and treat detection as a hint.
-
-So the plan is to split session detection behind a small per-agent interface — locate
-candidate transcripts, extract `cwd` / `branch`, identify the active one — and let each agent
-implement the third step as well as its surface allows. Contributions welcome, particularly
-from anyone who knows what the Codex sidebar exposes.
-
-## Known limits
-
-- With Claude docked in the sidebar rather than an editor tab there is no tab label to read, so detection falls back to mtime and may not pick the session you are looking at. This is the same problem the roadmap describes for Codex.
-- Looking a session up by tab label assumes labels are unique. Two sessions sharing a title resolve to the more recent transcript.
 - The file tree browses and opens. It does not create, rename or delete.
+- Session detection needs the session to be an editor tab. With Claude Code docked in the
+  sidebar there is no label to read, so it falls back to the most recent transcript by
+  modification time, which may not be the session you are looking at.
+- Looking a session up by tab label assumes labels are unique. Two sessions sharing a title
+  resolve to the more recently written transcript.
 
-## Debugging
+## Development
+
+No build step: plain CommonJS loaded straight by VS Code.
 
 ```bash
 node src/core.js ~/code   # worktree discovery and session matching, without starting VS Code
 ```
+
+`src/core.js` holds everything that does not touch the `vscode` module — worktree discovery,
+file indexing, git status parsing, session detection — so it can be run and tested on its
+own. `extension.js` is the VS Code layer: tree providers, the search UI, decorations,
+commands.
 
 ## License
 

@@ -1,0 +1,11 @@
+.git/**
+.gitignore
+.vscode/**
+
+# README links the screenshot by absolute URL, so it does not need shipping
+docs/**
+
+# source of icon.png, not loaded at runtime
+media/icon.svg
+
+**/*.vsix

@@ -3,9 +3,13 @@
   "displayName": "CC Worktree Nav",
   "description": "Browse and search git worktrees in the current window, and jump to the worktree of the active Claude Code session.",
   "version": "0.1.0",
-  "publisher": "daofeng",
+  "publisher": "dolphin-wood",
   "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/dolphin-wood/cc-worktree-nav.git"
+  },
   "engines": {
     "vscode": "^1.94.0"
   },

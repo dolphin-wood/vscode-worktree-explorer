@@ -38,6 +38,31 @@ ln -s "$PWD/vscode-worktree-explorer" ~/.vscode/extensions/vscode-worktree-explo
 
 Restart VS Code once. After that, code changes only need `Cmd+Shift+P` → **Reload Window**.
 
+### Or hand it to your agent
+
+Paste this into Claude Code, Codex, or whatever you are running:
+
+```
+Install the Worktree Explorer VS Code extension for me.
+
+1. Download the newest .vsix asset from the GitHub releases of
+   dolphin-wood/vscode-worktree-explorer. Prefer:
+     gh release download --repo dolphin-wood/vscode-worktree-explorer \
+       --pattern '*.vsix' --dir "$TMPDIR"
+   If the gh CLI is unavailable, resolve the asset URL from
+   https://api.github.com/repos/dolphin-wood/vscode-worktree-explorer/releases/latest
+   (.assets[0].browser_download_url) and curl -L it instead.
+
+2. Find the editor CLI on this machine - `code`, `cursor`, `code-insiders`
+   or `codium` - and run:
+     <cli> --install-extension <path to the .vsix>
+   If more than one is installed, ask me which editor to install into. If none
+   of them is on PATH, stop and tell me: do not install by copying files into
+   ~/.vscode/extensions, that bypasses the extension host and breaks updates.
+
+3. Delete the downloaded file, then tell me to run Reload Window.
+```
+
 ## The sidebar
 
 The **Worktrees** container in the activity bar has two panes.

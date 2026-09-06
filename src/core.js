@@ -8,7 +8,12 @@ const path = require('path');
 const os = require('os');
 const { execFile, execFileSync } = require('child_process');
 
-const DEFAULT_EXCLUDES = ['.git', 'node_modules', '.next', 'dist', 'build', '.turbo', 'coverage', '__pycache__', '.venv'];
+/**
+ * Only for the paths where git cannot answer: scanning for repositories, and walking a
+ * stale worktree that has no git metadata left. Everywhere else the ignore list comes from
+ * git itself - a hand-maintained list of directory names can never keep up with .gitignore.
+ */
+const WALK_EXCLUDES = ['.git', 'node_modules', '.next', 'dist', 'build', '.turbo', 'coverage', '__pycache__', '.venv'];
 
 function git(cwd, args, { timeout = 8000 } = {}) {
   return new Promise((resolve) => {
@@ -31,7 +36,7 @@ function hasGitEntry(dir) {
  * Discover git repos from a set of roots. A workspace folder is often not a repo itself
  * (e.g. a parent directory holding several repos), so scan maxDepth levels down.
  */
-function discoverRepos(roots, { maxDepth = 2, excludeDirs = DEFAULT_EXCLUDES } = {}) {
+function discoverRepos(roots, { maxDepth = 2, excludeDirs = WALK_EXCLUDES } = {}) {
   const found = new Set();
   const skip = new Set(excludeDirs);
 
@@ -150,7 +155,7 @@ async function listWorktrees(repos, { includeMainCheckout = false, includeStale 
  * Index the files in a worktree. Uses git ls-files rather than walking the tree: it is faster
  * and honours .gitignore for free, so node_modules and friends never show up.
  */
-async function indexWorktreeFiles(wtPath, { max = 20000, excludeDirs = DEFAULT_EXCLUDES } = {}) {
+async function indexWorktreeFiles(wtPath, { max = 20000, excludeDirs = WALK_EXCLUDES } = {}) {
   const text = await git(wtPath, ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], { timeout: 20000 });
   if (text == null) {
     // No git here (a stale worktree, for instance): fall back to walking the directory
@@ -209,18 +214,37 @@ function classifyStatus(x, y) {
   return 'modified';
 }
 
+/**
+ * The paths git ignores in this worktree. `--directory` collapses a fully ignored directory
+ * into a single entry (`node_modules/`) instead of listing everything inside it, so this
+ * stays cheap even on a big tree. Entries are worktree-relative; directories keep a trailing
+ * slash, which is how they are told apart from files of the same name.
+ *
+ * Returns null when git cannot answer (a stale worktree), meaning "filter nothing".
+ */
+async function gitIgnoredEntries(wtPath) {
+  const out = await git(wtPath, ['ls-files', '-z', '--directory', '--others', '--ignored', '--exclude-standard'], { timeout: 15000 });
+  if (out == null) return null;
+  return new Set(out.split('\0').filter(Boolean));
+}
+
 /** One directory level, for the file tree. */
-function readDirEntries(dir, { excludeDirs = DEFAULT_EXCLUDES } = {}) {
+function readDirEntries(dir, { excludeDirs = WALK_EXCLUDES, ignored = null, root = null } = {}) {
   const skip = new Set(excludeDirs);
   let entries;
   try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return []; }
   const out = [];
   for (const e of entries) {
+    const full = path.join(dir, e.name);
     const isDir = e.isDirectory() || (e.isSymbolicLink() && (() => {
-      try { return fs.statSync(path.join(dir, e.name)).isDirectory(); } catch { return false; }
+      try { return fs.statSync(full).isDirectory(); } catch { return false; }
     })());
     if (isDir && skip.has(e.name)) continue;
-    out.push({ name: e.name, isDir, path: path.join(dir, e.name) });
+    if (ignored && root) {
+      const rel = path.relative(root, full);
+      if (ignored.has(rel) || ignored.has(`${rel}/`)) continue;
+    }
+    out.push({ name: e.name, isDir, path: full });
   }
   out.sort((a, b) => (a.isDir !== b.isDir ? (a.isDir ? -1 : 1) : a.name.localeCompare(b.name, undefined, { numeric: true })));
   return out;
@@ -406,12 +430,13 @@ function detectSessionWorktree(worktrees, { home, scopeRoots = [], limit = 40, t
 }
 
 module.exports = {
-  DEFAULT_EXCLUDES,
+  WALK_EXCLUDES,
   discoverRepos,
   listWorktrees,
   parseWorktreePorcelain,
   indexWorktreeFiles,
   gitStatus,
+  gitIgnoredEntries,
   classifyStatus,
   readDirEntries,
   claudeHome,

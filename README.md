@@ -30,6 +30,17 @@ each with its branch and a `~5 +3 -1` tally of its git status. Click one to open
 and the set is remembered across window reloads. Files open in the current window like any
 other file — no new window, nothing reloaded.
 
+The tree follows the active editor: switch to a tab and its file is revealed and selected,
+the way the Explorer's `autoReveal` does. It only acts while the view is visible, so it never
+forces this sidebar open on a tab switch; a file opened while it was hidden is revealed when
+you come back to it.
+
+What the tree hides comes from `.gitignore`, read once per worktree with
+`git ls-files --ignored` (a fully ignored directory collapses to one entry, so this stays
+cheap). A hand-maintained list of directory names would always trail behind the repository's
+own ignore rules, and would miss ignored files entirely. `excludeDirs` remains for the few
+things git does not ignore.
+
 ## Search
 
 `Cmd+Alt+P` (`Ctrl+Alt+P` on Windows and Linux) opens a fuzzy file search over the opened
@@ -83,8 +94,10 @@ allows. Contributions welcome.
 | `worktreeExplorer.repoScanDepth` | `2` | Levels below each workspace folder to scan for git repositories |
 | `worktreeExplorer.extraWorktreeRoots` | `[]` | Extra repository paths, for repos outside the workspace |
 | `worktreeExplorer.includeMainCheckout` | `false` | Also list the main checkout, which is usually already in the Explorer |
-| `worktreeExplorer.excludeDirs` | `.git`, `node_modules`, `.next`, `dist`, `build`, `.turbo`, `coverage`, `__pycache__`, `.venv` | Directory names hidden in the file tree |
+| `worktreeExplorer.hideIgnoredFiles` | `true` | Hide what `.gitignore` excludes, matching what search does |
+| `worktreeExplorer.excludeDirs` | `[".git"]` | Always hidden, on top of `.gitignore` |
 | `worktreeExplorer.useFileIcons` | `true` | Use the file icon theme. Turn off if worktrees ignored by the parent repo appear greyed out |
+| `worktreeExplorer.autoReveal` | `true` | Reveal the active editor's file in the tree |
 | `worktreeExplorer.showGitStatus` | `true` | Git colors and badges on the file tree |
 | `worktreeExplorer.quickOpenMaxFiles` | `20000` | Index cap per worktree |
 | `worktreeExplorer.searchScopeFallback` | `all` | Scope used when no worktree is open |

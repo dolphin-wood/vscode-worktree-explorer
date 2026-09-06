@@ -1,6 +1,7 @@
 'use strict';
 const vscode = require('vscode');
 const path = require('path');
+const fs = require('fs');
 const core = require('./src/core');
 
 const CONTAINER_CMD = 'workbench.view.extension.worktreeExplorer';
@@ -60,9 +61,8 @@ class Store {
     if (this.all.length) return this.all;
     if (!this.loading) {
       this.loading = (async () => {
-        const excludeDirs = cfg().get('excludeDirs') || core.DEFAULT_EXCLUDES;
         const repos = core.discoverRepos(this.scopeRoots(), {
-          excludeDirs, maxDepth: cfg().get('repoScanDepth') || 2,
+          maxDepth: cfg().get('repoScanDepth') || 2,
         });
         this.all = await core.listWorktrees(repos, { includeMainCheckout: true });
         return this.all;
@@ -200,8 +200,9 @@ class FilesProvider {
       return this.store.openedWorktrees().map((wt) => this.node('worktree', wt.path, wt, undefined));
     }
     if (node.kind === 'file') return [];
-    const excludeDirs = cfg().get('excludeDirs') || core.DEFAULT_EXCLUDES;
-    return core.readDirEntries(node.path, { excludeDirs })
+    const excludeDirs = cfg().get('excludeDirs') || ['.git'];
+    const ignored = cfg().get('hideIgnoredFiles') === false ? null : await getIgnored(node.wt);
+    return core.readDirEntries(node.path, { excludeDirs, ignored, root: node.wt.path })
       .map((e) => this.node(e.isDir ? 'dir' : 'file', e.path, node.wt, node));
   }
 
@@ -241,6 +242,30 @@ class FilesProvider {
   }
 
   nodeFor(wt) { return this.node('worktree', wt.path, wt, undefined); }
+
+  /**
+   * Build the node chain from an opened worktree root down to fsPath, creating the
+   * intermediate nodes as it goes. TreeView.reveal walks getParent to the root, so every
+   * ancestor has to exist as a node before the leaf can be revealed.
+   */
+  nodeForPath(fsPath) {
+    const wt = this.store.openedWorktrees().find((w) => core.isInside(fsPath, w.path));
+    if (!wt) return null;
+    let node = this.node('worktree', wt.path, wt, undefined);
+    const rel = path.relative(wt.path, fsPath);
+    if (!rel || rel.startsWith('..')) return node;
+    let cur = wt.path;
+    const segs = rel.split(path.sep);
+    for (let i = 0; i < segs.length; i++) {
+      cur = path.join(cur, segs[i]);
+      let isDir = i < segs.length - 1;
+      if (!isDir) {
+        try { isDir = fs.statSync(cur).isDirectory(); } catch { isDir = false; }
+      }
+      node = this.node(isDir ? 'dir' : 'file', cur, wt, node);
+    }
+    return node;
+  }
 }
 
 // ---------------------------------------------------------------- git status
@@ -347,13 +372,22 @@ class GitStatus {
 // ---------------------------------------------------------------- file index
 
 const indexCache = new Map();
+const ignoredCache = new Map();
+
+/** Cached `git ls-files --ignored` for a worktree. Null means git could not answer. */
+async function getIgnored(wt) {
+  const hit = ignoredCache.get(wt.path);
+  if (hit && Date.now() - hit.ts < INDEX_TTL_MS) return hit.set;
+  const set = await core.gitIgnoredEntries(wt.path);
+  ignoredCache.set(wt.path, { set, ts: Date.now() });
+  return set;
+}
 
 async function getIndex(wt) {
   const hit = indexCache.get(wt.path);
   if (hit && Date.now() - hit.ts < INDEX_TTL_MS) return hit;
   const res = await core.indexWorktreeFiles(wt.path, {
     max: cfg().get('quickOpenMaxFiles') || 20000,
-    excludeDirs: cfg().get('excludeDirs') || core.DEFAULT_EXCLUDES,
   });
   const entry = { ...res, ts: Date.now() };
   indexCache.set(wt.path, entry);
@@ -557,6 +591,7 @@ function activate(context) {
     gitStatus.schedule(0);
     await vscode.commands.executeCommand(CONTAINER_CMD);
     try { await filesView.reveal(filesProvider.nodeFor(wt), { expand: true, select: true, focus: false }); } catch { /* view not ready */ }
+    followEditor(vscode.window.activeTextEditor);
   };
 
   /**
@@ -631,9 +666,36 @@ function activate(context) {
     }
   };
 
+  /**
+   * Follow the active editor, the way the Explorer's autoReveal does. Only while the view is
+   * actually visible - revealing into a hidden view would force this sidebar open on every
+   * tab switch. A file opened while it was hidden is remembered and revealed on the way in.
+   */
+  let pendingReveal = null;
+  const revealPath = async (fsPath) => {
+    const node = filesProvider.nodeForPath(fsPath);
+    if (!node) return;
+    try {
+      await filesView.reveal(node, { select: true, focus: false, expand: false });
+    } catch { /* hidden by .gitignore or excludeDirs, so not in the tree */ }
+  };
+  const followEditor = (editor) => {
+    if (cfg().get('autoReveal') === false) return;
+    const uri = editor && editor.document && editor.document.uri;
+    if (!uri || uri.scheme !== 'file') return;
+    if (!filesView.visible) { pendingReveal = uri.fsPath; return; }
+    pendingReveal = null;
+    revealPath(uri.fsPath);
+  };
+
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('worktreeExplorer.refresh', () => { indexCache.clear(); store.refresh(); gitStatus.schedule(0); });
+  reg('worktreeExplorer.refresh', () => {
+    indexCache.clear();
+    ignoredCache.clear();
+    store.refresh();
+    gitStatus.schedule(0);
+  });
   reg('worktreeExplorer.revealSessionWorktree', () => revealSession());
   reg('worktreeExplorer.openWorktree', (x) => openWorktree(wtOf(x)));
   reg('worktreeExplorer.closeWorktree', (x) => { const wt = wtOf(x); if (wt) { store.closeWt(wt.path); gitStatus.schedule(0); } });
@@ -688,10 +750,18 @@ function activate(context) {
     vscode.window.onDidChangeWindowState((st) => { if (st.focused) gitStatus.schedule(250); }),
     vscode.window.tabGroups.onDidChangeTabs(syncTabContext),
     vscode.window.tabGroups.onDidChangeTabGroups(syncTabContext),
+    vscode.window.onDidChangeActiveTextEditor(followEditor),
+    filesView.onDidChangeVisibility((e) => {
+      if (!e.visible || !pendingReveal) return;
+      const p = pendingReveal;
+      pendingReveal = null;
+      revealPath(p);
+    }),
   );
 
   syncFilesTitle();
   syncTabContext();
+  followEditor(vscode.window.activeTextEditor);
   gitStatus.schedule(600);
   if (cfg().get('autoRevealOnStartup')) setTimeout(() => revealSession({ quiet: true }), 1500);
 }

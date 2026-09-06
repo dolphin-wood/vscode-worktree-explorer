@@ -235,23 +235,20 @@
           "default": [],
           "description": "Additional git repository paths to discover worktrees from, for repos outside the workspace folders."
         },
+        "worktreeExplorer.hideIgnoredFiles": {
+          "type": "boolean",
+          "default": true,
+          "description": "Hide files and directories ignored by .gitignore in the file tree, matching what search already does. Read once per worktree via `git ls-files --ignored`."
+        },
         "worktreeExplorer.excludeDirs": {
           "type": "array",
           "items": {
             "type": "string"
           },
           "default": [
-            ".git",
-            "node_modules",
-            ".next",
-            "dist",
-            "build",
-            ".turbo",
-            "coverage",
-            "__pycache__",
-            ".venv"
+            ".git"
           ],
-          "description": "Directory names hidden in the file tree."
+          "description": "Directory names always hidden in the file tree, on top of whatever .gitignore already excludes. Most build and dependency directories are covered by hideIgnoredFiles, so this is only for things git does not ignore."
         },
         "worktreeExplorer.quickOpenMaxFiles": {
           "type": "number",
@@ -272,6 +269,11 @@
           "type": "boolean",
           "default": true,
           "description": "Use the file icon theme for the file tree. This also applies git decorations; turn it off if worktrees ignored by the parent repo show up greyed out."
+        },
+        "worktreeExplorer.autoReveal": {
+          "type": "boolean",
+          "default": true,
+          "description": "Reveal the active editor's file in the tree, the way the Explorer's autoReveal does. Only acts while the view is visible."
         },
         "worktreeExplorer.repoScanDepth": {
           "type": "number",

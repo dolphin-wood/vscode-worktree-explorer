@@ -1,4 +1,4 @@
-# CC Worktree Nav
+# Worktree Explorer
 
 Browse and search the files of your git worktrees **inside the current VS Code window**, and jump straight to the worktree the active Claude Code session is working in.
 
@@ -15,7 +15,7 @@ No new window, so a running Claude Code session is never lost to a reload.
 ## Install
 
 ```bash
-ln -s "$PWD" ~/.vscode/extensions/cc-worktree-nav
+ln -s "$PWD" ~/.vscode/extensions/vscode-worktree-explorer
 # restart VS Code once; after that, code changes only need Cmd+Shift+P -> Reload Window
 ```
 
@@ -48,9 +48,38 @@ Only when the active tab is not a session tab — Claude docked in the sidebar, 
 
 **Once a tab label has pinned a session down, that result stands.** Matching no worktree is a meaningful answer — the session is on the main checkout — and it reports that and stops. Falling through to some other session is exactly how you end up jumping to a worktree that has nothing to do with the tab in front of you.
 
+## Roadmap: other agents
+
+Browsing and search are agent-agnostic; they only need git. Session detection is the part
+that has to reach into an agent's own state, and today that means Claude Code only.
+
+Matching a session to a worktree is the easy half and generalises well — **Codex** records
+the same two signals in `~/.codex/sessions/YYYY/MM/DD/rollout-*.jsonl`, under
+`session_meta.payload`:
+
+```json
+{ "cwd": "/path/to/checkout",
+  "git": { "branch": "main", "commit_hash": "...", "repository_url": "..." } }
+```
+
+The hard half is the other one: deciding *which* session you are looking at. For Claude Code
+that falls out of the editor tab label, since each session is its own tab. Codex lives in a
+chat sidebar instead — there is no tab, therefore no label, and the trick does not carry over.
+Something else has to stand in for it, and none of the candidates is as clean:
+
+- Fall back to the most recently written transcript. Works, but picks the wrong session
+  whenever several run in parallel — exactly the case this extension exists for.
+- Read whatever state the sidebar extension exposes, if it exposes any.
+- Let the user pin a session to a worktree by hand, and treat detection as a hint.
+
+So the plan is to split session detection behind a small per-agent interface — locate
+candidate transcripts, extract `cwd` / `branch`, identify the active one — and let each agent
+implement the third step as well as its surface allows. Contributions welcome, particularly
+from anyone who knows what the Codex sidebar exposes.
+
 ## Known limits
 
-- With Claude docked in the sidebar rather than an editor tab there is no tab label to read, so detection falls back to mtime and may not pick the session you are looking at.
+- With Claude docked in the sidebar rather than an editor tab there is no tab label to read, so detection falls back to mtime and may not pick the session you are looking at. This is the same problem the roadmap describes for Codex.
 - Looking a session up by tab label assumes labels are unique. Two sessions sharing a title resolve to the more recent transcript.
 - The file tree browses and opens. It does not create, rename or delete.
 

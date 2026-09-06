@@ -3,12 +3,12 @@ const vscode = require('vscode');
 const path = require('path');
 const core = require('./src/core');
 
-const CONTAINER_CMD = 'workbench.view.extension.ccWorktreeNav';
+const CONTAINER_CMD = 'workbench.view.extension.worktreeExplorer';
 const INDEX_TTL_MS = 60_000;
 const MAX_PICK_ITEMS = 300;
-const OPENED_KEY = 'ccwt.openedWorktrees';
+const OPENED_KEY = 'worktreeExplorer.openedWorktrees';
 
-const cfg = () => vscode.workspace.getConfiguration('ccWorktreeNav');
+const cfg = () => vscode.workspace.getConfiguration('worktreeExplorer');
 
 // ---------------------------------------------------------------- fuzzy
 
@@ -91,7 +91,7 @@ class Store {
 
   persist() {
     this.context.workspaceState.update(OPENED_KEY, this.opened);
-    vscode.commands.executeCommand('setContext', 'ccwt.hasOpened', this.opened.length > 0);
+    vscode.commands.executeCommand('setContext', 'worktreeExplorer.hasOpened', this.opened.length > 0);
     this.fire();
   }
 
@@ -138,7 +138,7 @@ class ListProvider {
       this.store.git ? this.store.git.summaryText(wt.path) : null,
       multiRepo ? `— ${wt.repoName}` : null,
     ].filter(Boolean).join(' ');
-    item.contextValue = 'ccwtListItem';
+    item.contextValue = 'wtxListItem';
     item.iconPath = new vscode.ThemeIcon(
       wt.stale ? 'warning' : wt.isMain ? 'repo' : 'git-branch',
       isActive ? new vscode.ThemeColor('charts.green') : undefined,
@@ -151,7 +151,7 @@ class ListProvider {
       `Path: \`${wt.path}\``,
       wt.stale ? '\n\u26a0\ufe0f Git metadata was pruned; browsable as a plain directory only.' : '',
     ].filter(Boolean).join('\n'));
-    item.command = { command: 'ccwt.openWorktree', title: 'Open', arguments: [wt] };
+    item.command = { command: 'worktreeExplorer.openWorktree', title: 'Open', arguments: [wt] };
     return item;
   }
 }
@@ -216,7 +216,7 @@ class FilesProvider {
         wt.stale ? 'stale' : wt.branch || '(detached)',
         this.store.git ? this.store.git.summaryText(wt.path) : null,
       ].filter(Boolean).join('  ');
-      item.contextValue = 'ccwtOpenedRoot';
+      item.contextValue = 'wtxOpenedRoot';
       item.iconPath = new vscode.ThemeIcon(
         'root-folder',
         wt.path === this.store.activePath ? new vscode.ThemeColor('charts.green') : undefined,
@@ -234,7 +234,7 @@ class FilesProvider {
     if (cfg().get('useFileIcons') === false) {
       item.iconPath = isDir ? vscode.ThemeIcon.Folder : vscode.ThemeIcon.File;
     }
-    item.contextValue = isDir ? 'ccwtDir' : 'ccwtFile';
+    item.contextValue = isDir ? 'wtxDir' : 'wtxFile';
     item.tooltip = node.path;
     if (!isDir) item.command = { command: 'vscode.open', title: 'Open', arguments: [vscode.Uri.file(node.path)] };
     return item;
@@ -535,12 +535,12 @@ function activate(context) {
   const filesProvider = new FilesProvider(store);
   context.subscriptions.push(vscode.window.registerFileDecorationProvider(gitStatus));
 
-  const listView = vscode.window.createTreeView('ccWorktreeNav.list', { treeDataProvider: listProvider });
-  const filesView = vscode.window.createTreeView('ccWorktreeNav.files', {
+  const listView = vscode.window.createTreeView('worktreeExplorer.list', { treeDataProvider: listProvider });
+  const filesView = vscode.window.createTreeView('worktreeExplorer.files', {
     treeDataProvider: filesProvider, showCollapseAll: true,
   });
   context.subscriptions.push(listView, filesView);
-  vscode.commands.executeCommand('setContext', 'ccwt.hasOpened', store.opened.length > 0);
+  vscode.commands.executeCommand('setContext', 'worktreeExplorer.hasOpened', store.opened.length > 0);
 
   const syncFilesTitle = () => {
     const n = store.openedWorktrees().length;
@@ -587,7 +587,7 @@ function activate(context) {
   // Drives the `when` clause of the editor title button, so it only takes up room
   // on an actual Claude session tab.
   const syncTabContext = () => {
-    vscode.commands.executeCommand('setContext', 'ccwt.activeTabIsClaude', !!activeClaudeTab());
+    vscode.commands.executeCommand('setContext', 'worktreeExplorer.activeTabIsClaude', !!activeClaudeTab());
   };
 
   const revealSession = async ({ quiet = false } = {}) => {
@@ -633,29 +633,29 @@ function activate(context) {
 
   const reg = (id, fn) => context.subscriptions.push(vscode.commands.registerCommand(id, fn));
 
-  reg('ccwt.refresh', () => { indexCache.clear(); store.refresh(); gitStatus.schedule(0); });
-  reg('ccwt.revealSessionWorktree', () => revealSession());
-  reg('ccwt.openWorktree', (x) => openWorktree(wtOf(x)));
-  reg('ccwt.closeWorktree', (x) => { const wt = wtOf(x); if (wt) { store.closeWt(wt.path); gitStatus.schedule(0); } });
-  reg('ccwt.closeAllWorktrees', () => { store.closeAll(); gitStatus.schedule(0); });
-  reg('ccwt.quickOpen', () => quickOpenFiles(store, { kind: 'opened' }));
-  reg('ccwt.quickOpenInWorktree', (x) => {
+  reg('worktreeExplorer.refresh', () => { indexCache.clear(); store.refresh(); gitStatus.schedule(0); });
+  reg('worktreeExplorer.revealSessionWorktree', () => revealSession());
+  reg('worktreeExplorer.openWorktree', (x) => openWorktree(wtOf(x)));
+  reg('worktreeExplorer.closeWorktree', (x) => { const wt = wtOf(x); if (wt) { store.closeWt(wt.path); gitStatus.schedule(0); } });
+  reg('worktreeExplorer.closeAllWorktrees', () => { store.closeAll(); gitStatus.schedule(0); });
+  reg('worktreeExplorer.quickOpen', () => quickOpenFiles(store, { kind: 'opened' }));
+  reg('worktreeExplorer.quickOpenInWorktree', (x) => {
     const wt = wtOf(x);
     return quickOpenFiles(store, wt && wt.path ? { kind: 'wt', wt } : { kind: 'opened' });
   });
-  reg('ccwt.copyPath', async (x) => {
+  reg('worktreeExplorer.copyPath', async (x) => {
     if (!x || !x.path) return;
     await vscode.env.clipboard.writeText(x.path);
     vscode.window.setStatusBarMessage(`$(clippy) Copied ${x.path}`, 2500);
   });
-  reg('ccwt.revealInFinder', (x) => {
+  reg('worktreeExplorer.revealInFinder', (x) => {
     if (x && x.path) vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(x.path));
   });
-  reg('ccwt.openInNewWindow', (x) => {
+  reg('worktreeExplorer.openInNewWindow', (x) => {
     const wt = wtOf(x);
     if (wt && wt.path) vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(wt.path), { forceNewWindow: true });
   });
-  reg('ccwt.openTerminalHere', (x) => {
+  reg('worktreeExplorer.openTerminalHere', (x) => {
     if (!x || !x.path) return;
     const cwd = x.kind === 'file' ? path.dirname(x.path) : x.path;
     vscode.window.createTerminal({ name: path.basename(cwd), cwd }).show();
@@ -675,7 +675,7 @@ function activate(context) {
   context.subscriptions.push(
     vscode.workspace.onDidChangeWorkspaceFolders(() => store.refresh()),
     vscode.workspace.onDidChangeConfiguration((e) => {
-      if (e.affectsConfiguration('ccWorktreeNav')) { store.refresh(); gitStatus.schedule(0); }
+      if (e.affectsConfiguration('worktreeExplorer')) { store.refresh(); gitStatus.schedule(0); }
     }),
     // Keep the status fresh without polling: react to edits here, and to anything that
     // happened outside the window (a terminal commit, a rebase) when focus comes back.

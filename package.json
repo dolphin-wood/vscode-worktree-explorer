@@ -166,7 +166,7 @@
       "editor/title": [
         {
           "command": "ccwt.revealSessionWorktree",
-          "when": "config.ccWorktreeNav.showEditorTitleButton",
+          "when": "config.ccWorktreeNav.showEditorTitleButton && (ccwt.activeTabIsClaude || activeWebviewPanelId == claudeVSCodePanel)",
           "group": "navigation@-1"
         }
       ],
@@ -216,7 +216,7 @@
         "ccWorktreeNav.showEditorTitleButton": {
           "type": "boolean",
           "default": true,
-          "description": "Show the \"Open Worktree of Current Claude Session\" button in the editor title bar."
+          "description": "Show the \"Open Worktree of Current Claude Session\" button in the editor title bar. It only appears while the active tab is a Claude Code session."
         },
         "ccWorktreeNav.includeMainCheckout": {
           "type": "boolean",

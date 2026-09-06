@@ -560,17 +560,34 @@ function activate(context) {
   };
 
   /**
-   * When the active editor tab is a Claude Code session tab, its label is the session title
-   * (customTitle when renamed by hand, otherwise aiTitle, which every session has).
+   * Claude Code session tabs are webviews of type `claudeVSCodePanel`. VS Code reports the
+   * viewType with an internal prefix, hence the suffix test rather than equality. Matching
+   * the exact type keeps the plan-preview webview (`claudePlanPreview`) out.
+   */
+  const isClaudeSessionTab = (tab) => {
+    const vt = tab && tab.input && typeof tab.input === 'object' ? tab.input.viewType : undefined;
+    return typeof vt === 'string' && /(^|[-.])claudeVSCodePanel$/.test(vt);
+  };
+
+  const activeClaudeTab = () => {
+    const group = vscode.window.tabGroups.activeTabGroup;
+    const tab = group && group.activeTab;
+    return isClaudeSessionTab(tab) ? tab : null;
+  };
+
+  /**
+   * A session tab's label is its title (customTitle when renamed by hand, otherwise
+   * aiTitle, which every session has), which is what pins the session down.
    */
   const activeClaudeTabTitle = () => {
-    for (const group of vscode.window.tabGroups.all) {
-      const tab = group.activeTab;
-      if (!tab || !tab.isActive) continue;
-      const vt = tab.input && typeof tab.input === 'object' ? tab.input.viewType : undefined;
-      if (typeof vt === 'string' && /claude/i.test(vt)) return tab.label;
-    }
-    return null;
+    const tab = activeClaudeTab();
+    return tab ? tab.label : null;
+  };
+
+  // Drives the `when` clause of the editor title button, so it only takes up room
+  // on an actual Claude session tab.
+  const syncTabContext = () => {
+    vscode.commands.executeCommand('setContext', 'ccwt.activeTabIsClaude', !!activeClaudeTab());
   };
 
   const revealSession = async ({ quiet = false } = {}) => {
@@ -669,9 +686,12 @@ function activate(context) {
     vscode.workspace.onDidDeleteFiles(() => gitStatus.schedule()),
     vscode.workspace.onDidRenameFiles(() => gitStatus.schedule()),
     vscode.window.onDidChangeWindowState((st) => { if (st.focused) gitStatus.schedule(250); }),
+    vscode.window.tabGroups.onDidChangeTabs(syncTabContext),
+    vscode.window.tabGroups.onDidChangeTabGroups(syncTabContext),
   );
 
   syncFilesTitle();
+  syncTabContext();
   gitStatus.schedule(600);
   if (cfg().get('autoRevealOnStartup')) setTimeout(() => revealSession({ quiet: true }), 1500);
 }

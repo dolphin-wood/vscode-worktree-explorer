@@ -23,7 +23,7 @@ ln -s "$PWD" ~/.vscode/extensions/cc-worktree-nav
 
 - **活动栏 Worktrees 图标** — 打开面板，浏览所有 worktree 的文件树
 - **`Cmd+Alt+P`** — 跨所有 worktree 快速打开文件（右键单个 worktree 可只搜它）
-- **编辑器右上角 `◎` 按钮** — 定位当前 Claude session 的 worktree，并在侧栏展开选中；命中的那个 worktree 图标会变绿
+- **编辑器右上角按钮**（只在 Claude session tab 上出现）— 定位当前 Claude session 的 worktree，并在侧栏展开选中；命中的那个 worktree 图标会变绿
 
 worktree 的发现方式：对每个 workspace folder 向下扫 `repoScanDepth`（默认 2）层找 git 仓库，再对每个仓库跑 `git worktree list`。所以 `foo.worktrees/*` 和 `foo/.claude/worktrees/*` 两种布局都能覆盖。
 
@@ -48,7 +48,6 @@ worktree 的发现方式：对每个 workspace folder 向下扫 `repoScanDepth`�
 
 - CC 开在**侧栏**而不是编辑器 tab 时，拿不到 tab 标题，只能退回按 mtime 取最近活跃的 session —— 多个 session 并行时可能不是你正在看的那个。
 - 靠 tab 标题反查 session 依赖标题唯一。两个 session 起了同名标题时，取 mtime 较新的那个。
-- 编辑器标题栏按钮在所有编辑器上都显示，不只在 CC 的 tab 上（`activeWebviewPanelId` 的 when 子句对 CC 的 webview 不总是可靠）。用 `ccWorktreeNav.showEditorTitleButton` 可以关掉。
 - 文件树是只读浏览 + 打开，没有新建/重命名/删除。
 
 ## 调试
